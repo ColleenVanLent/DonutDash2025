@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Skyline High School Donut Dash</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin: 0; }
+    #banner { width: 100%; max-height: 250px; object-fit: cover; display: block; }
+
+    /* Current Selection banner */
+    #currentSelection {
+      font-size: 36px;
+      font-weight: 800;
+      margin: 20px auto;
+      padding: 20px;
+      max-width: 900px;
+      background: linear-gradient(135deg, #00274C, #FFCB05);
+      color: #ffffff;
+      border-radius: 14px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+    }
+
+    h1 { margin: 10px; }
+    h2 { margin-top: 24px; }
+    .wheel-wrap { display: inline-block; margin: 10px 25px; vertical-align: top; }
+    canvas { display: block; margin: 12px auto; }
+
+    button {
+      padding: 10px 20px;
+      margin: 8px;
+      font-size: 18px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      background-color: #00274C;
+      color: white;
+      transition: transform 0.1s ease, background-color 0.2s ease, color 0.2s ease;
+    }
+    button:hover { background-color: #FFCB05; color: #00274C; }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    #results { margin: 20px auto; font-size: 20px; max-width: 900px; text-align: left; }
+    #results h2 { margin-bottom: 8px; }
+    .sr-only { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+  </style>
+
+  <!-- Animation engine (TweenMax 2.x), then Winwheel -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/2.1.3/TweenMax.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/winwheel@1.0.1/dist/Winwheel.min.js"></script>
+</head>
+<body>
+  <!-- Banner -->
+  <img id="banner" src="https://d368g9lw5ileu7.cloudfront.net/uploads/generic/genericWebsites-250/250858/websiteBanner-WjQetrAe-bOoLYS-huge.png"
+       alt="Skyline High School Donut Dash banner">
+
+  <h1>Skyline High School Donut Dash</h1>
+
+  <!-- Current Selection (ARIA live for screen readers) -->
+  <div id="currentSelection" role="status" aria-live="assertive">🎡 Waiting for spin...</div>
+
+  <div class="wheel-wrap">
+    <h2>Participant Wheel</h2>
+    <canvas id="participantWheel" width="420" height="420" aria-label="Participant wheel"></canvas>
+    <button id="spinParticipantBtn">🎡 Spin Participant</button>
+  </div>
+
+  <div class="wheel-wrap">
+    <h2>Prize Wheel</h2>
+    <canvas id="prizeWheel" width="420" height="420" aria-label="Prize wheel"></canvas>
+    <button id="spinPrizeBtn">🎁 Spin Prize</button>
+  </div>
+
+  <div id="results"><h2>Results History</h2></div>
+
+  <script>
+    // ---- Data ----
+    // Participants 1..225
+    let participants = Array.from({ length: 225 }, (_, i) => String(i + 1));
+    // Example prizes; replace with your real list
+    let prizes = ["Gift Card", "T-shirt", "Water Bottle", "Donuts!", "Hoodie", "Stickers", "Beanie"];
+
+    // ---- State ----
+    let participantWheel, prizeWheel;
+    let lastWinner = null;
+    let spinning = false;
+
+    // ---- Helpers ----
+    const currentEl = () => document.getElementById('currentSelection');
+    const resultsEl = () => document.getElementById('results');
+    const disableButtons = (flag) => {
+      document.getElementById('spinParticipantBtn').disabled = flag;
+      document.getElementById('spinPrizeBtn').disabled = flag || !lastWinner;
+    };
+
+    // Skyline-inspired palette for slices
+    const palette = ["#00274C", "#1F3B64", "#355279", "#4C6A8F", "#6381A6", "#FFCB05", "#E6B300"];
+    function paletteColor(i) { return palette[i % palette.length]; }
+
+    // With 225 slices, text on the wheel is unreadable and slows drawing.
+    // We turn off text drawing for the participant wheel; we’ll announce the pick in the banner.
+    function buildParticipantWheel() {
+      participantWheel = new Winwheel({
+        canvasId: 'participantWheel',
+        numSegments: participants.length,
+        drawText: false,               // performance: no text for 225 slices
+        segments: participants.map((p, i) => ({ fillStyle: paletteColor(i), text: p })),
+        animation: {
+          type: 'spinToStop',
+          duration: 5,
+          spins: 8,
+          callbackFinished: onParticipantFinished,
+          callbackAfter: () => {} // no-op, but reserved if you want tick effects
+        },
+        pointerAngle: 0 // default top
+      });
+      participantWheel.draw();
+    }
+
+    function buildPrizeWheel() {
+      prizeWheel = new Winwheel({
+        canvasId: 'prizeWheel',
+        numSegments: prizes.length,
+        segments: prizes.map((p, i) => ({ fillStyle: paletteColor(i + 2), text: p })),
+        textFontSize: 14,
+        animation: {
+          type: 'spinToStop',
+          duration: 5,
+          spins: 8,
+          callbackFinished: onPrizeFinished
+        },
+        pointerAngle: 0
+      });
+      prizeWheel.draw();
+    }
+
+    // ---- Spin handlers ----
+    function spinParticipant() {
+      if (spinning) return;
+      if (!participantWheel || participants.length === 0) {
+        alert("All participants have been chosen!");
+        return;
+      }
+      spinning = true;
+      disableButtons(true);
+      participantWheel.stopAnimation(false);
+      participantWheel.rotationAngle = 0; // reset start
+      participantWheel.draw();
+      participantWheel.startAnimation();
+    }
+
+    function spinPrize() {
+      if (spinning) return;
+      if (!lastWinner) {
+        alert("Pick a participant first!");
+        return;
+      }
+      if (!prizeWheel || prizes.length === 0) {
+        alert("All prizes have been awarded!");
+        return;
+      }
+      spinning = true;
+      disableButtons(true);
+      prizeWheel.stopAnimation(false);
+      prizeWheel.rotationAngle = 0;
+      prizeWheel.draw();
+      prizeWheel.startAnimation();
+    }
+
+    // ---- Callbacks (most reliable way: getIndicatedSegment from the wheel) ----
+    function onParticipantFinished() {
+      const seg = participantWheel.getIndicatedSegment();
+      const chosen = seg && seg.text ? seg.text : null;
+
+      if (!chosen) {
+        currentEl().textContent = "⚠️ Could not read selection. Try again.";
+        spinning = false;
+        disableButtons(false);
+        return;
+      }
+
+      lastWinner = chosen;
+      // Update big banner
+      currentEl().textContent = `🎉 Participant #${lastWinner} chosen!`;
+      // Log to history
+      resultsEl().insertAdjacentHTML('beforeend', `<p>🎡 Participant #${lastWinner} selected.</p>`);
+
+      // Remove from pool and rebuild the wheel
+      participants = participants.filter(p => p !== lastWinner);
+      buildParticipantWheel();
+
+      spinning = false;
+      disableButtons(false); // prize button will enable because lastWinner is set
+    }
+
+    function onPrizeFinished() {
+      const seg = prizeWheel.getIndicatedSegment();
+      const chosenPrize = seg && seg.text ? seg.text : null;
+
+      if (!chosenPrize) {
+        currentEl().textContent = "⚠️ Could not read prize. Try again.";
+        spinning = false;
+        disableButtons(false);
+        return;
+      }
+
+      // Announce and log
+      currentEl().textContent = `🏆 Participant #${lastWinner} wins: ${chosenPrize}`;
+      resultsEl().insertAdjacentHTML('beforeend', `<p>🏆 Participant #${lastWinner} wins: ${chosenPrize}</p>`);
+
+      // Remove the awarded prize and rebuild
+      prizes = prizes.filter(p => p !== chosenPrize);
+      buildPrizeWheel();
+
+      // Clear the participant so a new one must be drawn next
+      lastWinner = null;
+
+      spinning = false;
+      disableButtons(false); // prize button stays disabled until next participant spin
+    }
+
+    // ---- Init ----
+    window.addEventListener('load', () => {
+      buildParticipantWheel();
+      buildPrizeWheel();
+      document.getElementById('spinParticipantBtn').onclick = spinParticipant;
+      document.getElementById('spinPrizeBtn').onclick = spinPrize;
+      disableButtons(false);
+    });
+  </script>
+</body>
+</html>
