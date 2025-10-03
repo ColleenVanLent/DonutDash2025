@@ -20,7 +20,10 @@
       --navy: #00274C;
       --maize: #FFCB05;
     }
-
+#prizeWheelDiv text {
+  font-size: 14px !important;  /* adjust size */
+  font-family: Arial, sans-serif;
+}
     * { box-sizing: border-box; }
     body { font-family: Arial, sans-serif; text-align: center; margin: 0; }
 
@@ -117,7 +120,7 @@
     // ===== Data =====
     // Runners "0000" .. "0225"
     let runners = Array.from({ length: 226 }, (_, i) => i.toString().padStart(4, "0"));
-    let prizes = ["Gift Card", "T-shirt", "Water Bottle", "Donuts!", "Hoodie", "Stickers", "Beanie"];
+    let prizes = ["Washtenaw Dairy Gift Card #1", "Washtenaw Dairy Gift Card #2", "Washtenaw Dairy Gift Card #3", "Washtenaw Dairy t-shirt #1", "Washtenaw Dairy t-shirt #2","Washtenaw Dairy Fleece", "Washtenaw Dairy Beanie #1","Washtenaw Dairy Beanie #2", "Wolverine Pickball Rental", "NY Pizza Depot Gift Card #1", "NY Pizza Depot Gift Card #2"];
     let lastWinner = null;
 
     // ===== Wheels =====
