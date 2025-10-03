@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Skyline High School Donut Dash</title>
+
+  <!-- wheelnav with modified Raphael (correct include order) -->
+  <script src="https://cdn.jsdelivr.net/npm/wheelnav@1.7.1/js/dist/raphael.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/wheelnav@1.7.1/js/dist/wheelnav.min.js"></script>
+
+  <style>
+    :root {
+      /* 6-shade palette for the Runner spinner */
+      --c0: #ffffff;   /* white */
+      --c1: #add8e6;   /* light blue */
+      --c2: #4682b4;   /* steel blue */
+      --c3: #ffc0cb;   /* light pink */
+      --c4: #ff69b4;   /* hot pink */
+      --c5: #87cefa;   /* sky blue */
+      --navy: #00274C;
+      --maize: #FFCB05;
+    }
+
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; text-align: center; margin: 0; }
+
+    /* Banner as a DIV with background image */
+    #banner {
+      min-height: 250px;
+      background-image: url("https://d368g9lw5ileu7.cloudfront.net/uploads/generic/genericWebsites-250/250858/websiteBanner-WjQetrAe-bOoLYS-huge.png");
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+
+    h1 { margin: 16px 0; }
+
+    /* Current selection gradient: light blue -> medium blue */
+    #currentSelection {
+      font-size: 32px;
+      font-weight: 800;
+      margin: 20px auto;
+      padding: 16px;
+      max-width: 900px;
+      background: linear-gradient(135deg, #ADD8E6, #4682B4);
+      color: #fff;
+      border-radius: 14px;
+      box-shadow: 0 6px 18px rgba(0,0,0,.25);
+    }
+
+    .wheels { display: flex; flex-wrap: wrap; justify-content: center; gap: 40px; padding-bottom: 10px; }
+    .wheel-wrap { width: 440px; }
+    .wheel-holder { width: 420px; height: 420px; margin: 0 auto; }
+
+    /* Spin animation target (we rotate this wrapper) */
+    .spin-target {
+      transition: transform 4s cubic-bezier(.2,.8,.2,1);
+      transform-origin: 50% 50%;
+    }
+
+    button {
+      padding: 10px 20px; margin: 10px; font-size: 18px;
+      border-radius: 10px; border: none; cursor: pointer;
+      background: var(--navy); color:#fff;
+    }
+    button:hover { background: var(--maize); color: var(--navy); }
+    button:disabled { opacity:.6; cursor:not-allowed; }
+
+    #results { margin: 20px auto; font-size: 20px; max-width: 900px; text-align: left; }
+    .highlight {
+      border: 2px solid var(--navy);
+      padding: 6px 10px;
+      font-weight: bold;
+      background: #f0f8ff;
+      border-radius: 6px;
+    }
+
+    /* Remove any outlines/strokes from slices */
+    #runnerWheelDiv svg path,
+    #prizeWheelDiv svg path {
+      stroke: none !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- Banner DIV with background image -->
+  <div id="banner" role="img" aria-label="Skyline High School Donut Dash banner"></div>
+
+  <h1>Skyline High School Donut Dash</h1>
+  <div id="currentSelection" role="status" aria-live="assertive">🍩
+ Waiting for spin...</div>
+
+  <div class="wheels">
+    <!-- RUNNER WHEEL -->
+    <div class="wheel-wrap">
+      <h2>Runner Wheel</h2>
+
+      <div id="runnerWheelOuter" class="spin-target">
+        <div id="runnerWheelDiv" class="wheel-holder"></div>
+      </div>
+      <button id="spinRunnerBtn">👟 Pick a Runner</button>
+    </div>
+
+    <!-- PRIZE WHEEL -->
+    <div class="wheel-wrap">
+      <h2>Prize Wheel</h2>
+      <div id="prizeWheelOuter" class="spin-target">
+        <div id="prizeWheelDiv" class="wheel-holder"></div>
+      </div>
+      <button id="spinPrizeBtn">🎁 Pick a Prize</button>
+    </div>
+  </div>
+
+  <div id="results"><h2>Results History</h2></div>
+
+  <script>
+    // ===== Data =====
+    // Runners "0000" .. "0225"
+    let runners = Array.from({ length: 226 }, (_, i) => i.toString().padStart(4, "0"));
+    let prizes = ["Gift Card", "T-shirt", "Water Bottle", "Donuts!", "Hoodie", "Stickers", "Beanie"];
+    let lastWinner = null;
+
+    // ===== Wheels =====
+    let runnerWheel, prizeWheel;
+
+    // 6-color palette applied via JS to guarantee it takes effect (repeats)
+    const runnerPalette = ["#ffffff", "#add8e6", "#4682b4", "#ffc0cb", "#ff69b4", "#87cefa"];
+    function makePalette(len) {
+      const arr = new Array(len);
+      for (let i = 0; i < len; i++) arr[i] = runnerPalette[i % runnerPalette.length];
+      return arr;
+    }
+
+    function buildRunnerWheel() {
+      const holder = document.getElementById("runnerWheelDiv");
+      holder.innerHTML = ""; // clear previous SVG
+      runnerWheel = new wheelnav("runnerWheelDiv");
+      runnerWheel.slicePathFunction = slicePath().PieSlice;        // no donut ring
+      runnerWheel.colors = makePalette(runners.length);            // apply six-shade palette
+      runnerWheel.initWheel(new Array(runners.length).fill(""));   // hide labels on the wheel
+      runnerWheel.createWheel();
+    }
+
+    function buildPrizeWheel() {
+      const holder = document.getElementById("prizeWheelDiv");
+      holder.innerHTML = "";
+      prizeWheel = new wheelnav("prizeWheelDiv");
+      prizeWheel.slicePathFunction = slicePath().DonutSlice;       // donut look ok for prizes
+      prizeWheel.initWheel(prizes);                                 // show prize labels
+      prizeWheel.createWheel();
+    }
+
+    // ===== Spin animation (CSS rotate on wrapper) =====
+    function spinVisual(wrapperEl, turns = 5, onEnd) {
+      const extra = 90 + Math.floor(Math.random() * 180); // random extra degrees
+      const current = Number(wrapperEl.dataset.rot || 0);
+      const target = current + turns * 360 + extra;
+
+      const done = () => {
+        wrapperEl.removeEventListener('transitionend', done, { once: true });
+        if (typeof onEnd === 'function') onEnd();
+      };
+
+      wrapperEl.addEventListener('transitionend', done, { once: true });
+      wrapperEl.style.transform = `rotate(${target}deg)`;
+      wrapperEl.dataset.rot = String(target);
+    }
+
+    // ===== UI helpers =====
+    const $current = () => document.getElementById('currentSelection');
+    const $results = () => document.getElementById('results');
+    const disableButtons = (flag) => {
+      document.getElementById('spinRunnerBtn').disabled = flag;
+      document.getElementById('spinPrizeBtn').disabled = flag || !lastWinner;
+    };
+
+    // ===== Spin Runner =====
+    document.getElementById('spinRunnerBtn').addEventListener('click', () => {
+      if (runners.length === 0) {
+        alert("All runners have been chosen!");
+        return;
+      }
+      disableButtons(true);
+
+      // Choose winner now, reveal after spin finishes
+      const idx = Math.floor(Math.random() * runners.length);
+      const winner = runners[idx];
+
+      spinVisual(document.getElementById('runnerWheelOuter'), 6, () => {
+        lastWinner = winner;
+        runners.splice(idx, 1);
+        console.log("Runner chosen:", winner);
+
+        $current().textContent = `🎉 Runner #${winner} chosen!`;
+        $results().insertAdjacentHTML('beforeend', `<p>🎡 Runner #${winner} selected.</p>`);
+
+        buildRunnerWheel();
+        disableButtons(false);
+      });
+    });
+
+    // ===== Spin Prize =====
+    document.getElementById('spinPrizeBtn').addEventListener('click', () => {
+      if (!lastWinner) {
+        alert("Pick a runner first!");
+        return;
+      }
+      if (prizes.length === 0) {
+        alert("All prizes have been awarded!");
+        return;
+      }
+      disableButtons(true);
+
+      const idx = Math.floor(Math.random() * prizes.length);
+      const prize = prizes[idx];
+
+      spinVisual(document.getElementById('prizeWheelOuter'), 6, () => {
+        prizes.splice(idx, 1);
+        console.log("Prize awarded:", prize, "to runner:", lastWinner);
+
+        $current().textContent = `🏆 Runner #${lastWinner} wins: ${prize}`;
+        // Highlight when both runner + prize are shown
+        $results().insertAdjacentHTML('beforeend',
+          `<p class="highlight">🏆 Runner #${lastWinner} wins: ${prize}</p>`);
+
+        buildPrizeWheel();
+        lastWinner = null;
+        disableButtons(false);
+      });
+    });
+
+    // ===== Init =====
+    buildRunnerWheel();
+    buildPrizeWheel();
+    disableButtons(false);
+  </script>
+</body>
+</html>
