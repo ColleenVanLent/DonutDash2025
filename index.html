@@ -14,16 +14,12 @@
       --c0: #ffffff;   /* white */
       --c1: #add8e6;   /* light blue */
       --c2: #4682b4;   /* steel blue */
-      --c3: #ffc0cb;   /* light pink */
       --c4: #ff69b4;   /* hot pink */
       --c5: #87cefa;   /* sky blue */
       --navy: #00274C;
       --maize: #FFCB05;
     }
-#prizeWheelDiv text {
-  font-size: 14px !important;  /* adjust size */
-  font-family: Arial, sans-serif;
-}
+
     * { box-sizing: border-box; }
     body { font-family: Arial, sans-serif; text-align: center; margin: 0; }
 
@@ -42,13 +38,20 @@
     #currentSelection {
       font-size: 32px;
       font-weight: 800;
-      margin: 20px auto;
+      margin: 20px auto 8px;
       padding: 16px;
       max-width: 900px;
       background: linear-gradient(135deg, #ADD8E6, #4682B4);
       color: #fff;
       border-radius: 14px;
       box-shadow: 0 6px 18px rgba(0,0,0,.25);
+    }
+
+    /* Thank-you note under the current selection */
+    #thanks {
+      margin: 6px auto 16px;
+      font-size: 32px;
+      color: #0b3d91;
     }
 
     .wheels { display: flex; flex-wrap: wrap; justify-content: center; gap: 40px; padding-bottom: 10px; }
@@ -83,6 +86,12 @@
     #prizeWheelDiv svg path {
       stroke: none !important;
     }
+
+    /* Make prize labels smaller so sponsor+number fit better */
+    #prizeWheelDiv text {
+      font-size: 14px !important;
+      font-family: Arial, sans-serif;
+    }
   </style>
 </head>
 <body>
@@ -90,14 +99,15 @@
   <div id="banner" role="img" aria-label="Skyline High School Donut Dash banner"></div>
 
   <h1>Skyline High School Donut Dash</h1>
-  <div id="currentSelection" role="status" aria-live="assertive">🍩
- Waiting for spin...</div>
+
+  <!-- Current selection & thanks -->
+  <div id="currentSelection" role="status" aria-live="assertive">🍩 Waiting for spin...</div>
+  <div id="thanks" aria-live="polite"></div>
 
   <div class="wheels">
     <!-- RUNNER WHEEL -->
     <div class="wheel-wrap">
       <h2>Runner Wheel</h2>
-
       <div id="runnerWheelOuter" class="spin-target">
         <div id="runnerWheelDiv" class="wheel-holder"></div>
       </div>
@@ -120,13 +130,29 @@
     // ===== Data =====
     // Runners "0000" .. "0225"
     let runners = Array.from({ length: 226 }, (_, i) => i.toString().padStart(4, "0"));
-    let prizes = ["Washtenaw Dairy Gift Card #1", "Washtenaw Dairy Gift Card #2", "Washtenaw Dairy Gift Card #3", "Washtenaw Dairy t-shirt #1", "Washtenaw Dairy t-shirt #2","Washtenaw Dairy Fleece", "Washtenaw Dairy Beanie #1","Washtenaw Dairy Beanie #2", "Wolverine Pickball Rental", "NY Pizza Depot Gift Card #1", "NY Pizza Depot Gift Card #2"];
+
+    // Prizes: show compact label on wheel, but announce full prize string in banner/history
+    // Add sponsor field so we can thank them by name
+    let prizes = [
+      { label: "WD #1", full: "Washtenaw Dairy Gift Card #1", sponsor: "Washtenaw Dairy" },
+      { label: "WD #2", full: "Washtenaw Dairy Gift Card #2", sponsor: "Washtenaw Dairy" },
+      { label: "WD #3", full: "Washtenaw Dairy Gift Card #3", sponsor: "Washtenaw Dairy" },
+      { label: "WD Tee #1", full: "Washtenaw Dairy T-shirt #1", sponsor: "Washtenaw Dairy" },
+      { label: "WD Tee #2", full: "Washtenaw Dairy T-shirt #2", sponsor: "Washtenaw Dairy" },
+      { label: "WD Fleece", full: "Washtenaw Dairy Fleece", sponsor: "Washtenaw Dairy" },
+      { label: "WD Beanie #1", full: "Washtenaw Dairy Beanie #1", sponsor: "Washtenaw Dairy" },
+      { label: "WD Beanie #2", full: "Washtenaw Dairy Beanie #2", sponsor: "Washtenaw Dairy" },
+      { label: "Wolverine", full: "Wolverine Pickball Rental", sponsor: "Wolverine Pickball" },
+      { label: "NYPD #1", full: "NY Pizza Depot Gift Card #1", sponsor: "NY Pizza Depot" },
+      { label: "NYPD #2", full: "NY Pizza Depot Gift Card #2", sponsor: "NY Pizza Depot" }
+    ];
+
     let lastWinner = null;
 
     // ===== Wheels =====
     let runnerWheel, prizeWheel;
 
-    // 6-color palette applied via JS to guarantee it takes effect (repeats)
+    // 6-color palette for runner wheel (repeats)
     const runnerPalette = ["#ffffff", "#add8e6", "#4682b4", "#ffc0cb", "#ff69b4", "#87cefa"];
     function makePalette(len) {
       const arr = new Array(len);
@@ -138,7 +164,7 @@
       const holder = document.getElementById("runnerWheelDiv");
       holder.innerHTML = ""; // clear previous SVG
       runnerWheel = new wheelnav("runnerWheelDiv");
-      runnerWheel.slicePathFunction = slicePath().PieSlice;        // no donut ring
+      runnerWheel.slicePathFunction = slicePath().PieSlice;        // clean pie slices (no donut ring)
       runnerWheel.colors = makePalette(runners.length);            // apply six-shade palette
       runnerWheel.initWheel(new Array(runners.length).fill(""));   // hide labels on the wheel
       runnerWheel.createWheel();
@@ -148,8 +174,8 @@
       const holder = document.getElementById("prizeWheelDiv");
       holder.innerHTML = "";
       prizeWheel = new wheelnav("prizeWheelDiv");
-      prizeWheel.slicePathFunction = slicePath().DonutSlice;       // donut look ok for prizes
-      prizeWheel.initWheel(prizes);                                 // show prize labels
+      prizeWheel.slicePathFunction = slicePath().DonutSlice;       // donut look for prizes
+      prizeWheel.initWheel(prizes.map(p => p.label));              // compact labels on wheel
       prizeWheel.createWheel();
     }
 
@@ -171,6 +197,7 @@
 
     // ===== UI helpers =====
     const $current = () => document.getElementById('currentSelection');
+    const $thanks = () => document.getElementById('thanks');
     const $results = () => document.getElementById('results');
     const disableButtons = (flag) => {
       document.getElementById('spinRunnerBtn').disabled = flag;
@@ -184,6 +211,7 @@
         return;
       }
       disableButtons(true);
+      $thanks().textContent = ""; // clear any prior thanks
 
       // Choose winner now, reveal after spin finishes
       const idx = Math.floor(Math.random() * runners.length);
@@ -195,7 +223,7 @@
         console.log("Runner chosen:", winner);
 
         $current().textContent = `🎉 Runner #${winner} chosen!`;
-        $results().insertAdjacentHTML('beforeend', `<p>🎡 Runner #${winner} selected.</p>`);
+        $results().insertAdjacentHTML('beforeend', `<p>👟 Runner #${winner} selected.</p>`);
 
         buildRunnerWheel();
         disableButtons(false);
@@ -215,16 +243,23 @@
       disableButtons(true);
 
       const idx = Math.floor(Math.random() * prizes.length);
-      const prize = prizes[idx];
+      const prize = prizes[idx]; // {label, full, sponsor}
 
       spinVisual(document.getElementById('prizeWheelOuter'), 6, () => {
         prizes.splice(idx, 1);
-        console.log("Prize awarded:", prize, "to runner:", lastWinner);
+        console.log("Prize awarded:", prize.full, "to runner:", lastWinner);
 
-        $current().textContent = `🏆 Runner #${lastWinner} wins: ${prize}`;
-        // Highlight when both runner + prize are shown
-        $results().insertAdjacentHTML('beforeend',
-          `<p class="highlight">🏆 Runner #${lastWinner} wins: ${prize}</p>`);
+        // Announce full prize text up top
+        $current().textContent = `🏆 Runner #${lastWinner} wins: ${prize.full}`;
+
+        // Thank-you note to the sponsor right below the announcement
+        $thanks().textContent = `Thank you, ${prize.sponsor}, for your support!`;
+
+        // History gets the full text + highlight styling
+        $results().insertAdjacentHTML(
+          'beforeend',
+          `<p class="highlight">🏆 Runner #${lastWinner} wins: ${prize.full}</p>`
+        );
 
         buildPrizeWheel();
         lastWinner = null;
